@@ -1,0 +1,22 @@
+{
+  "name": "authentication",
+  "version": "0.0.0",
+  "description": "Authenication for an application.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node tests.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/robertjaustin/javascript-authentication.git"
+  },
+  "keywords": [
+    "javascript",
+    "authentication"
+  ],
+  "author": "oatkiller",
+  "license": "Unlicense",
+  "bugs": {
+    "url": "https://github.com/robertjaustin/javascript-authentication/issues"
+  }
+}
