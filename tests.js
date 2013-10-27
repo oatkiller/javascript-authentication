@@ -9,7 +9,6 @@ var handleOnAssertion = function (assertionText) {
 var assertEquals = function (actual,expected,assertionText) {
 	if (actual !== expected) {
 		console.log("FAILED ASSERTION: " + assertionText);
-		process.exit();
 	} else {
 		handleOnAssertion(assertionText);
 	}
@@ -21,7 +20,6 @@ assertEquals.passedCount = 0;
 var assertRejected = function (promise,assertionText) {
 	promise.then(function () {
 		console.log("FAILED ASSERTION: " + assertionText);
-		process.exit();
 	},function () {
 		handleOnAssertion(assertionText);
 	});
@@ -31,24 +29,21 @@ var assertResolved = function (promise,assertionText) {
 		handleOnAssertion(assertionText);
 	},function () {
 		console.log("FAILED ASSERTION: " + assertionText);
-		process.exit();
 	});
 };
 var fail = function (assertionText) {
 	console.log("FAILED ASSERTION: " + assertionText);
-	process.exit();
 };
 var addTests = function (test) {
 	if (test === undefined) {
 		assertEquals.printPassedCount();
-		process.exit();
+	} else {
+		var otherTests = Array.prototype.slice.call(arguments,1);
+		onAssertion = function () {
+			addTests.apply(undefined,otherTests);
+		};
+		test();
 	}
-
-	var otherTests = Array.prototype.slice.call(arguments,1);
-	onAssertion = function () {
-		addTests.apply(undefined,otherTests);
-	};
-	test();
 };
 
 var authentication = require("./authentication.js");
@@ -78,16 +73,44 @@ addTests(
 	},
 	function () {
 		user = new authentication.User;
-		assertResolved(user.setPassword("          "),"Passwords may contain spaces.");
+		assertResolved(user.setPassword("Aa0 a a a a a"),"Passwords may contain spaces.");
 	},
 	function () {
 		user = new authentication.User;
-		user.setPassword("aAaAaAaAaAaAaAaAaAaA");
-		user.getPasswordMatches("aaaaaaaaaaaaaaaaaaaa").
+		var assertionText = "Passwords are case sensitive.";
+
+		user.
+			setPassword("0,AaAaAaAaAaAaAaAaAaA").
+			then(function () {
+				return user.getPasswordMatches("0,aaaaaaaaaaaaaaaaaaa");
+			},function () {
+				fail(assertionText);
+			}).
 			then(function (matches) {
 				assertEquals(matches,false,"Passwords are case sensitive.");
 			},function () {
-				throw new Error;
+				fail(assertionText);
 			});
+
+	},
+	function () {
+		user = new authentication.User;
+
+		var assertionText = "Identical password matches";
+		var password = "0,AaAaAaAaAaAaAaAaAaA";
+
+		user.
+			setPassword(password).
+			then(function () {
+				return user.getPasswordMatches(password);
+			},function () {
+				fail(assertionText);
+			}).
+			then(function (matches) {
+				assertEquals(matches,true,assertionText);
+			},function () {
+				fail(assertionText);
+			});
+
 	}
 );
