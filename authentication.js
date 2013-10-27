@@ -2,6 +2,9 @@ var Promise = require("./promise.js");
 var crypto = require("crypto");
 (function () {
 
+	var saltSize = 64;
+	var hashEncoding = "base64";
+
 	var authentication = {
 		User : function () {
 		}
@@ -15,60 +18,95 @@ var crypto = require("crypto");
 		return this.username;
 	};
 
+	var threeInARow = /(.)\1\1/;
+
+	var heuristics = [
+		/[A-Z]/,
+		/[a-z]/,
+		/[0-9]/,
+		/[^a-zA-Z0-9]/
+	];
+	var heuristicsCount = heuristics.length;
+	var heuristicsRequiredToPass = 3;
+
 	authentication.User.prototype.setPassword = function (password) {
 		var promise = new Promise;
+		var passedHeuristics = 0;
+		var i;
 
-		if (password.length < 10) {
+		if (password.length < 10 ||
+				password.length > 128 ||
+				password.length < 20 && /^[a-z]*$/.test(password) === true ||
+				threeInARow.test(password) === true) {
+
 			promise.reject();
-		} else if (password.length > 128) {
-			promise.reject();
-		} else if (password.length < 20 && /^[a-z]*$/.test(password) === true) {
-			promise.reject();
+			return promise;
 		} else {
-			this.
-				hash(password).
-				then(function (hash) {
-					this.passwordHash = hash;
-					promise.resolve();
-				}.bind(this),function () {
-					promise.reject();
-				});
+
+			for (i = 0; i < heuristicsCount && passedHeuristics < heuristicsRequiredToPass && passedHeuristics + (heuristicsCount - i) >= heuristicsRequiredToPass; i++) {
+				if (heuristics[i].test(password) === true) {
+					passedHeuristics++;
+				}
+			}
+
+			if (passedHeuristics !== heuristicsRequiredToPass) {
+				promise.reject();
+				return promise;
+			}
+		}
+
+		this.
+			hash(password).
+			then(function (hash) {
+				this.passwordHash = hash;
+				promise.resolve();
+			}.bind(this),function () {
+				promise.reject();
+			});
+
+		return promise;
+	};
+
+	authentication.User.prototype.getSalt = function () {
+		var promise = new Promise;
+
+		if (this.passwordHash === undefined) {
+			crypto.randomBytes(saltSize,function (exception,buffer) {
+				if (exception !== null) {
+					promise.reject(exception);
+				} else {
+					promise.resolve(buffer);
+				}
+			});
+		} else {
+			var hashBuffer = new Buffer(this.passwordHash,hashEncoding);
+			promise.resolve(hashBuffer.slice(0,saltSize));
 		}
 
 		return promise;
 	};
 
-	authentication.User.getSalt = function () {
-		var promise = new Promise;
-		crypto.randomBytes(64,function (exception,buffer) {
-			if (exception !== null) {
-				promise.reject(exception);
-			} else {
-				promise.resolve(buffer);
-			}
-		});
-		return promise;
-	};
-
 	authentication.User.prototype.hash = function (password) {
-		var promise = new Promise;
 
-		authentication.User.getSalt().
+		return this.getSalt().
 			then(function (salt) {
 
-				crypto.pbkdf2(password,salt,10000,512,function (error,derivedKey) {
+				var promise = new Promise;
+
+				crypto.pbkdf2(password,salt,10000,512,function (exception,derivedKey) {
 					if (typeof error === "undefined") {
-						var hash64 = Buffer.concat([salt,derivedKey]).toString("base64");
-						promise.resolve(hash64);
+						promise.resolve(Buffer.concat([salt,derivedKey]).toString(hashEncoding));
 					} else {
-						promise.reject(error);
+						promise.reject(exception);
 					}
 				});
-			},function () {
-				promise.reject.apply(promise,arguments);
+
+				return promise;
+
+			},function (exception) {
+				promise.reject(exception);
 			});
 
-		return promise;
 	};
 
 	authentication.User.prototype.getPasswordMatches = function (password) {
@@ -77,10 +115,12 @@ var crypto = require("crypto");
 		if (typeof this.passwordHash === undefined) {
 			promise.reject();
 		} else {
+			var passwordHash = this.passwordHash;
+
 			this.
 				hash(password).
 				then(function (hash) {
-					if (hash === this.passwordHash) {
+					if (hash === passwordHash) {
 						promise.resolve(true);
 					} else {
 						promise.resolve(false);

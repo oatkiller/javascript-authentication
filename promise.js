@@ -40,6 +40,7 @@ var Promise = function () {
 		log("storing reject arguments: ",rejectArguments);
 		this.changed(true);
 		this.notifyObservers();
+		return this;
 	};
 
 	this.resolve = function () {
@@ -47,6 +48,7 @@ var Promise = function () {
 		resolveArguments = Array.prototype.slice.call(arguments,0);
 		this.changed(true);
 		this.notifyObservers();
+		return this;
 	};
 
 	this.then = function (resolveHandler,rejectHandler) {
@@ -62,7 +64,11 @@ var Promise = function () {
 				log("calling resolve");
 				var returnedPromise = resolveHandler.apply(undefined,resolveArguments);
 				if (returnedPromise instanceof Promise) {
-					returnedPromise.then(promise.resolve,promise.reject);
+					returnedPromise.then(function () {
+						promise.resolve.apply(promise,arguments);
+					},function () {
+						promise.reject.apply(promise,arguments);
+					});
 				}
 			}
 		});
