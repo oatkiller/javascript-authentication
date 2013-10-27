@@ -39,45 +39,56 @@ var crypto = require("crypto");
 	};
 
 	authentication.User.getSalt = function () {
-		return crypto.randomBytes(64);
+		var promise = new Promise;
+		crypto.randomBytes(64,function (exception,buffer) {
+			if (exception !== null) {
+				promise.reject(exception);
+			} else {
+				promise.resolve(buffer);
+			}
+		});
+		return promise;
 	};
 
 	authentication.User.prototype.hash = function (password) {
 		var promise = new Promise;
-		var salt = authentication.User.getSalt();
 
-		crypto.pbkdf2(password,salt,10000,512,function (error,derivedKey) {
-			if (typeof error === "undefined") {
-				promise.resolve(salt + derivedKey.toString());
-			} else {
-				promise.reject(error);
-			}
-		});
+		authentication.User.getSalt().
+			then(function (salt) {
 
-		console.log('arst');
+				crypto.pbkdf2(password,salt,10000,512,function (error,derivedKey) {
+					if (typeof error === "undefined") {
+						var hash64 = Buffer.concat([salt,derivedKey]).toString("base64");
+						promise.resolve(hash64);
+					} else {
+						promise.reject(error);
+					}
+				});
+			},function () {
+				promise.reject.apply(promise,arguments);
+			});
+
 		return promise;
 	};
 
 	authentication.User.prototype.getPasswordMatches = function (password) {
-		var promise;
-		promise = new Promise;
+		var promise = new Promise;
 
 		if (typeof this.passwordHash === undefined) {
 			promise.reject();
-			return promise;
+		} else {
+			this.
+				hash(password).
+				then(function (hash) {
+					if (hash === this.passwordHash) {
+						promise.resolve(true);
+					} else {
+						promise.resolve(false);
+					}
+				},function () {
+					promise.reject();
+				});
 		}
-
-		this.
-			hash(password).
-			then(function (hash) {
-				if (hash === this.passwordHash) {
-					promise.resolve(true);
-				} else {
-					promise.resolve(false);
-				}
-			},function () {
-				promise.reject();
-			});
 			
 		return promise;
 	};

@@ -78,16 +78,16 @@ addTests(
 	},
 	function () {
 		user = new authentication.User;
-		assertRejected(user.setPassword("          "),"Passwords may contain spaces.");
+		assertResolved(user.setPassword("          "),"Passwords may contain spaces.");
 	},
 	function () {
-	user = new authentication.User;
-	user.setPassword("aAaAaAaAaAaAaAaAaAaA");
-	user.getPasswordMatches("aaaaaaaaaaaaaaaaaaaa").
-		then(function (matches) {
-			assertEquals(matches,false,"Passwords are case sensitive.");
-		},function () {
-			throw new Error;
-		});
+		user = new authentication.User;
+		user.setPassword("aAaAaAaAaAaAaAaAaAaA");
+		user.getPasswordMatches("aaaaaaaaaaaaaaaaaaaa").
+			then(function (matches) {
+				assertEquals(matches,false,"Passwords are case sensitive.");
+			},function () {
+				throw new Error;
+			});
 	}
 );

@@ -1,66 +1,72 @@
-var Promise = function (underlyingFunction) {
-	var thenCallbacks;
-	var rejectCallbacks;
-	var nextPromises;
-	var i;
+var makeObservable = require("./observable.js");
+var currentId = 0;
 
-	this.resolve = function () {
-		this.resolve = this.reject = function () {};
+var Promise = function () {
+	var id = ++currentId;
 
-		if (thenCallbacks !== undefined) {
-			for (i = 0, length = thenCallbacks.length; i < length; i++) {
-				thenCallbacks[i].apply(undefined,arguments);
-			}
+	var log = function () {
+		var args = Array.prototype.slice.call(arguments,0);
+		console.log.apply(console,["Promise(" + id + ")"].concat(args));
+	};
+	var log = function () {};
+
+	var resolveArguments, rejectArguments, oldAddObserver, oldNotifyObservers,
+		noop = function () {};
+
+	makeObservable(this);
+
+	oldAddObserver = this.addObserver;
+	this.addObserver = function () {
+		var retval = oldAddObserver.apply(this,arguments);
+		if (rejectArguments !== undefined || resolveArguments !== undefined) {
+			log("state is final, notifying");
+			this.changed(true);
+			this.notifyObservers();
 		}
+		return retval;
+	};
+
+	oldNotifyObservers = this.notifyObservers;
+	this.notifyObservers = function () {
+		log("notifying ",this.getObserversLength()," with resolveArguments: ",resolveArguments," and rejectArguments ",rejectArguments);
+		var retval = oldNotifyObservers.apply(this,[resolveArguments,rejectArguments]);
+		this.deleteObservers();
+		return retval;
 	};
 
 	this.reject = function () {
-		this.resolve = this.reject = function () {};
-
-		if (rejectCallbacks !== undefined) {
-			for (i = 0, length = rejectCallbacks.length; i < length; i++) {
-				rejectCallbacks[i].apply(undefined,arguments);
-			}
-		}
-		if (nextPromises !== undefined) {
-			for (i = 0, length = nextPromises.length; i < length; i++) {
-				nextPromises[i].reject.apply(nextPromises[i],arguments);
-			}
-		}
+		this.resolve = this.reject = noop;
+		rejectArguments = Array.prototype.slice.call(arguments,0);
+		log("storing reject arguments: ",rejectArguments);
+		this.changed(true);
+		this.notifyObservers();
 	};
 
-	this.then = function (callback,errorCallback) {
-		var nextPromise = new Promise;
+	this.resolve = function () {
+		this.resolve = this.reject = noop;
+		resolveArguments = Array.prototype.slice.call(arguments,0);
+		this.changed(true);
+		this.notifyObservers();
+	};
 
-		if (nextPromises === undefined) {
-			nextPromises = [];
-		}
-
-		nextPromises.push(nextPromise);
-
-		if (thenCallbacks === undefined) {
-			thenCallbacks = [];
-		}
-
-		thenCallbacks.push(function () {
-			var result = callback.apply(undefined,arguments);
-			if (result instanceof Promise) {
-				result.then(function () {
-					nextPromise.resolve.apply(nextPromise,arguments);
-				},function () {
-					nextPromise.reject.apply(nextPromise,arguments);
-				});
+	this.then = function (resolveHandler,rejectHandler) {
+		var promise = new Promise;
+		log("thening it");
+		this.addObserver(function (resolveArguments,rejectArguments) {
+			log("then callback happening, reject: ",rejectArguments," resolve: ",resolveArguments);
+			if (rejectArguments !== undefined) {
+				log("calling reject");
+				rejectHandler.apply(undefined,rejectArguments);
+				promise.reject.apply(promise,rejectArguments);
 			} else {
-				nextPromise.resolve(result);
+				log("calling resolve");
+				var returnedPromise = resolveHandler.apply(undefined,resolveArguments);
+				if (returnedPromise instanceof Promise) {
+					returnedPromise.then(promise.resolve,promise.reject);
+				}
 			}
 		});
-
-		if (rejectCallbacks === undefined) {
-			rejectCallbacks = [];
-		}
-
-		rejectCallbacks.push(errorCallback);
-		return nextPromise;
+		return promise;
 	};
 
 };
